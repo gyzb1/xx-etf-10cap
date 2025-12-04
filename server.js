@@ -449,14 +449,18 @@ app.post('/api/backtest-etf', async (req, res) => {
     const { startDate, endDate } = req.body;
     
     console.log(`Fetching 512890 ETF holdings and calculating dual-factor weights from ${startDate} to ${endDate}`);
+    console.log(`Tushare token configured: ${!!TUSHARE_TOKEN}`);
     
     // Step 1: Get ETF portfolio holdings
     const etfPortfolio = await getFundPortfolio('512890.SH', endDate);
     
     if (!etfPortfolio || !etfPortfolio.items || etfPortfolio.items.length === 0) {
+      console.error('Failed to fetch ETF portfolio data');
+      console.error('etfPortfolio:', etfPortfolio);
       return res.status(404).json({ 
         error: 'ETF portfolio data not available',
-        message: '无法获取512890的持仓数据，请检查日期或稍后重试'
+        message: '无法获取512890的持仓数据，请检查日期或稍后重试。请确保已配置TUSHARE_TOKEN环境变量。',
+        hasToken: !!TUSHARE_TOKEN
       });
     }
     
