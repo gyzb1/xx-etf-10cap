@@ -1,0 +1,13 @@
+node_modules/
+.env
+.DS_Store
+*.log
+
+# Backup files
+*_old.*
+*_backup.*
+*.backup
+README_OLD.md
+
+# Test files
+test-etf.js
