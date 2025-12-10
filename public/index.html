@@ -551,7 +551,12 @@
 
             <!-- Performance Metrics -->
             <div class="card" id="metricsSection" style="display: none;">
-                <h2 style="margin-bottom: 20px; color: #333;">📊 绩效指标</h2>
+                <h2 style="margin-bottom: 15px; color: #333;">📊 绩效指标</h2>
+                <div style="background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 12px 15px; margin-bottom: 20px; border-radius: 4px;">
+                    <p style="margin: 0; color: #1e40af; font-size: 13px;">
+                        <strong>💡 说明：</strong>前8项为绝对指标（组合 vs ETF对比），后4项为相对指标（组合相对ETF的表现，ETF列显示N/A）
+                    </p>
+                </div>
                 <table class="stocks-table">
                     <thead>
                         <tr>
@@ -820,10 +825,10 @@
             // Add relative metrics if available
             if (metrics.relative) {
                 metricsConfig.push(
-                    { key: 'informationRatio', label: '信息比率', unit: '', desc: '相对基准的超额收益/跟踪误差', isRelative: true },
-                    { key: 'treynorRatio', label: '特雷诺比率', unit: '', desc: '超额收益/Beta（系统性风险）', isRelative: true },
-                    { key: 'beta', label: 'Beta系数', unit: '', desc: '相对基准的波动性', isRelative: true },
-                    { key: 'trackingError', label: '跟踪误差', unit: '%', desc: '与基准的偏离程度', isRelative: true }
+                    { key: 'informationRatio', label: '信息比率', unit: '', desc: '组合相对ETF的超额收益/跟踪误差', isRelative: true },
+                    { key: 'treynorRatio', label: '特雷诺比率', unit: '', desc: '组合的超额收益/Beta（系统性风险）', isRelative: true },
+                    { key: 'beta', label: 'Beta系数', unit: '', desc: '组合相对ETF的波动性（1=同步）', isRelative: true },
+                    { key: 'trackingError', label: '跟踪误差', unit: '%', desc: '组合与ETF的偏离程度', isRelative: true }
                 );
             }
 
@@ -834,7 +839,7 @@
                 let portfolioValue, etfValue;
                 if (config.isRelative) {
                     portfolioValue = metrics.relative ? metrics.relative[config.key] : '-';
-                    etfValue = '-'; // Relative metrics don't have ETF values
+                    etfValue = '<span style="color: #999; font-size: 12px;">N/A</span>'; // Relative metrics don't have ETF values
                 } else {
                     portfolioValue = metrics.portfolio ? metrics.portfolio[config.key] : '-';
                     etfValue = metrics.etf ? metrics.etf[config.key] : '-';
