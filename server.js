@@ -70,13 +70,20 @@ async function getDailyData(tsCode, startDate, endDate) {
   return data;
 }
 
-// Get fund daily data
+// Get fund daily data (including accumulated net value)
 async function getFundDailyData(tsCode, startDate, endDate) {
-  const data = await callTushareAPI('fund_daily', {
+  // Use fund_nav interface which includes accum_nav (accumulated net value)
+  const data = await callTushareAPI('fund_nav', {
     ts_code: tsCode,
     start_date: startDate,
     end_date: endDate
   });
+  
+  // Log available fields for debugging
+  if (data && data.fields) {
+    console.log(`Fund data fields: ${data.fields.join(', ')}`);
+  }
+  
   return data;
 }
 
@@ -606,13 +613,20 @@ function calculateETFNetValue(etfData) {
   const fields = etfData.fields;
   const dateIdx = fields.indexOf('trade_date');
   const accumNavIdx = fields.indexOf('accum_nav'); // 累计净值（考虑分红再投资）
-  const navIdx = fields.indexOf('nav');
+  const navIdx = fields.indexOf('unit_nav') >= 0 ? fields.indexOf('unit_nav') : fields.indexOf('nav'); // 单位净值
   const closeIdx = fields.indexOf('close');
+  
+  console.log(`ETF net value calculation:`);
+  console.log(`  - accum_nav index: ${accumNavIdx}`);
+  console.log(`  - unit_nav/nav index: ${navIdx}`);
+  console.log(`  - Using field: ${accumNavIdx >= 0 ? 'accum_nav' : (navIdx >= 0 ? 'unit_nav/nav' : 'close')}`);
   
   const sortedItems = items.sort((a, b) => a[dateIdx] - b[dateIdx]);
   
   // 优先使用累计净值（已考虑分红再投资），其次使用单位净值或收盘价
   const initialValue = sortedItems[0][accumNavIdx] || sortedItems[0][navIdx] || sortedItems[0][closeIdx] || 1;
+  
+  console.log(`  - Initial value: ${initialValue} (date: ${sortedItems[0][dateIdx]})`);
   
   return sortedItems.map(item => {
     const value = item[accumNavIdx] || item[navIdx] || item[closeIdx];
