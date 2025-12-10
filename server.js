@@ -1139,12 +1139,13 @@ app.post('/api/backtest-dynamic', async (req, res) => {
     console.log('\n=== Calculating dual-factor weights for each period ===');
     
     for (let period of portfolioPeriods) {
-      console.log(`\nPeriod: ${period.reportDate}`);
+      console.log(`\nPeriod: Report ${period.reportDate}, Rebalance on ${period.startDate}`);
       
       // Fetch factor data for this period's stocks (market cap for weighting)
+      // Use startDate (rebalancing date) market cap to avoid look-ahead bias
       const stocksFactors = await batchProcess(period.stockCodes, async (code, index) => {
         try {
-          const dailyBasicInfo = await getDailyBasic(code, period.reportDate);
+          const dailyBasicInfo = await getDailyBasic(code, period.startDate);
           
           let pb = null;
           let marketCap = null;
@@ -1163,7 +1164,9 @@ app.post('/api/backtest-dynamic', async (req, res) => {
               marketCap = dailyBasicInfo.items[0][totalMvIdx];
             }
             
-            console.log(`${code} Market Cap: ${marketCap}`);
+            const tradeDateIdx = fields.indexOf('trade_date');
+            const actualDate = tradeDateIdx >= 0 ? dailyBasicInfo.items[0][tradeDateIdx] : 'N/A';
+            console.log(`${code} Market Cap: ${marketCap} (Date: ${actualDate})`);
           }
           
           return {
