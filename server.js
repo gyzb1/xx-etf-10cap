@@ -70,10 +70,10 @@ async function getDailyData(tsCode, startDate, endDate) {
   return data;
 }
 
-// Get fund daily data (including accumulated net value)
+// Get fund daily data (using adj_close for dividend-adjusted returns)
 async function getFundDailyData(tsCode, startDate, endDate) {
-  // Use fund_nav interface which includes accum_nav (accumulated net value)
-  const data = await callTushareAPI('fund_nav', {
+  // Use fund_daily interface and get adj_close (dividend-adjusted close price)
+  const data = await callTushareAPI('fund_daily', {
     ts_code: tsCode,
     start_date: startDate,
     end_date: endDate
@@ -612,24 +612,26 @@ function calculateETFNetValue(etfData) {
   const items = etfData.items;
   const fields = etfData.fields;
   const dateIdx = fields.indexOf('trade_date');
-  const accumNavIdx = fields.indexOf('accum_nav'); // 累计净值（考虑分红再投资）
-  const navIdx = fields.indexOf('unit_nav') >= 0 ? fields.indexOf('unit_nav') : fields.indexOf('nav'); // 单位净值
+  const adjCloseIdx = fields.indexOf('adj_close'); // 后复权价格（已考虑分红）
   const closeIdx = fields.indexOf('close');
+  const navIdx = fields.indexOf('nav');
   
   console.log(`ETF net value calculation:`);
-  console.log(`  - accum_nav index: ${accumNavIdx}`);
-  console.log(`  - unit_nav/nav index: ${navIdx}`);
-  console.log(`  - Using field: ${accumNavIdx >= 0 ? 'accum_nav' : (navIdx >= 0 ? 'unit_nav/nav' : 'close')}`);
+  console.log(`  - Available fields: ${fields.join(', ')}`);
+  console.log(`  - adj_close index: ${adjCloseIdx}`);
+  console.log(`  - close index: ${closeIdx}`);
+  console.log(`  - nav index: ${navIdx}`);
+  console.log(`  - Using field: ${adjCloseIdx >= 0 ? 'adj_close' : (closeIdx >= 0 ? 'close' : 'nav')}`);
   
   const sortedItems = items.sort((a, b) => a[dateIdx] - b[dateIdx]);
   
-  // 优先使用累计净值（已考虑分红再投资），其次使用单位净值或收盘价
-  const initialValue = sortedItems[0][accumNavIdx] || sortedItems[0][navIdx] || sortedItems[0][closeIdx] || 1;
+  // 优先使用后复权价格（已考虑分红），其次使用收盘价或净值
+  const initialValue = sortedItems[0][adjCloseIdx] || sortedItems[0][closeIdx] || sortedItems[0][navIdx] || 1;
   
   console.log(`  - Initial value: ${initialValue} (date: ${sortedItems[0][dateIdx]})`);
   
   return sortedItems.map(item => {
-    const value = item[accumNavIdx] || item[navIdx] || item[closeIdx];
+    const value = item[adjCloseIdx] || item[closeIdx] || item[navIdx];
     return {
       date: item[dateIdx],
       netValue: value / initialValue
