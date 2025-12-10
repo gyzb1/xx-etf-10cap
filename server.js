@@ -605,16 +605,22 @@ function calculateETFNetValue(etfData) {
   const items = etfData.items;
   const fields = etfData.fields;
   const dateIdx = fields.indexOf('trade_date');
+  const accumNavIdx = fields.indexOf('accum_nav'); // 累计净值（考虑分红再投资）
   const navIdx = fields.indexOf('nav');
   const closeIdx = fields.indexOf('close');
   
   const sortedItems = items.sort((a, b) => a[dateIdx] - b[dateIdx]);
-  const initialValue = sortedItems[0][navIdx] || sortedItems[0][closeIdx] || 1;
   
-  return sortedItems.map(item => ({
-    date: item[dateIdx],
-    netValue: (item[navIdx] || item[closeIdx]) / initialValue
-  }));
+  // 优先使用累计净值（已考虑分红再投资），其次使用单位净值或收盘价
+  const initialValue = sortedItems[0][accumNavIdx] || sortedItems[0][navIdx] || sortedItems[0][closeIdx] || 1;
+  
+  return sortedItems.map(item => {
+    const value = item[accumNavIdx] || item[navIdx] || item[closeIdx];
+    return {
+      date: item[dateIdx],
+      netValue: value / initialValue
+    };
+  });
 }
 
 // API endpoint for ETF holdings replication with dual-factor weighting
