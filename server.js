@@ -603,7 +603,7 @@ function calculateRelativeMetrics(portfolioMetrics, benchmarkMetrics, riskFreeRa
   };
 }
 
-// Calculate ETF net value
+// Calculate ETF net value with manual dividend adjustment
 function calculateETFNetValue(etfData) {
   if (!etfData || !etfData.items || etfData.items.length === 0) {
     return [];
@@ -612,31 +612,41 @@ function calculateETFNetValue(etfData) {
   const items = etfData.items;
   const fields = etfData.fields;
   const dateIdx = fields.indexOf('trade_date');
-  const adjCloseIdx = fields.indexOf('adj_close'); // 后复权价格（已考虑分红）
   const closeIdx = fields.indexOf('close');
-  const navIdx = fields.indexOf('nav');
+  const pctChgIdx = fields.indexOf('pct_chg'); // 涨跌幅（%）
   
   console.log(`ETF net value calculation:`);
   console.log(`  - Available fields: ${fields.join(', ')}`);
-  console.log(`  - adj_close index: ${adjCloseIdx}`);
   console.log(`  - close index: ${closeIdx}`);
-  console.log(`  - nav index: ${navIdx}`);
-  console.log(`  - Using field: ${adjCloseIdx >= 0 ? 'adj_close' : (closeIdx >= 0 ? 'close' : 'nav')}`);
+  console.log(`  - pct_chg index: ${pctChgIdx}`);
   
   const sortedItems = items.sort((a, b) => a[dateIdx] - b[dateIdx]);
   
-  // 优先使用后复权价格（已考虑分红），其次使用收盘价或净值
-  const initialValue = sortedItems[0][adjCloseIdx] || sortedItems[0][closeIdx] || sortedItems[0][navIdx] || 1;
-  
-  console.log(`  - Initial value: ${initialValue} (date: ${sortedItems[0][dateIdx]})`);
-  
-  return sortedItems.map(item => {
-    const value = item[adjCloseIdx] || item[closeIdx] || item[navIdx];
-    return {
+  if (pctChgIdx >= 0) {
+    // Use pct_chg to calculate cumulative returns (handles dividends correctly)
+    console.log(`  - Using pct_chg for dividend-adjusted returns`);
+    let cumulativeValue = 1.0;
+    
+    return sortedItems.map((item, index) => {
+      if (index > 0) {
+        const pctChg = item[pctChgIdx] || 0;
+        cumulativeValue *= (1 + pctChg / 100);
+      }
+      return {
+        date: item[dateIdx],
+        netValue: cumulativeValue
+      };
+    });
+  } else {
+    // Fallback: use close price (may have dividend gaps)
+    console.log(`  - Fallback: using close price`);
+    const initialValue = sortedItems[0][closeIdx] || 1;
+    
+    return sortedItems.map(item => ({
       date: item[dateIdx],
-      netValue: value / initialValue
-    };
-  });
+      netValue: (item[closeIdx] || initialValue) / initialValue
+    }));
+  }
 }
 
 // API endpoint for ETF holdings replication with dual-factor weighting
