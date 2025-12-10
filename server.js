@@ -459,6 +459,93 @@ function calculateDualFactorWeights(stocksFactors) {
   };
 }
 
+// Calculate performance metrics for a portfolio
+function calculatePerformanceMetrics(netValueData, riskFreeRate = 0.03) {
+  if (!netValueData || netValueData.length < 2) {
+    return null;
+  }
+  
+  // Calculate daily returns
+  const dailyReturns = [];
+  for (let i = 1; i < netValueData.length; i++) {
+    const ret = (netValueData[i].netValue - netValueData[i-1].netValue) / netValueData[i-1].netValue;
+    dailyReturns.push(ret);
+  }
+  
+  if (dailyReturns.length === 0) return null;
+  
+  // 1. Total Return
+  const totalReturn = (netValueData[netValueData.length - 1].netValue - 1) * 100;
+  
+  // 2. Annualized Return
+  const days = netValueData.length - 1;
+  const years = days / 252; // 252 trading days per year
+  const annualizedReturn = years > 0 
+    ? (Math.pow(netValueData[netValueData.length - 1].netValue, 1 / years) - 1) * 100
+    : 0;
+  
+  // 3. Volatility (annualized)
+  const meanReturn = dailyReturns.reduce((sum, r) => sum + r, 0) / dailyReturns.length;
+  const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - meanReturn, 2), 0) / dailyReturns.length;
+  const volatility = Math.sqrt(variance * 252) * 100; // Annualized
+  
+  // 4. Sharpe Ratio
+  const excessReturn = (annualizedReturn / 100) - riskFreeRate;
+  const sharpeRatio = volatility > 0 ? excessReturn / (volatility / 100) : 0;
+  
+  // 5. Maximum Drawdown
+  let maxDrawdown = 0;
+  let peak = netValueData[0].netValue;
+  const drawdowns = [];
+  
+  for (let i = 0; i < netValueData.length; i++) {
+    const value = netValueData[i].netValue;
+    if (value > peak) {
+      peak = value;
+    }
+    const drawdown = (peak - value) / peak;
+    drawdowns.push(drawdown);
+    if (drawdown > maxDrawdown) {
+      maxDrawdown = drawdown;
+    }
+  }
+  
+  // 6. Calmar Ratio (annualized return / max drawdown)
+  const calmarRatio = maxDrawdown > 0 ? (annualizedReturn / 100) / maxDrawdown : 0;
+  
+  // 7. Sortino Ratio (downside deviation)
+  const downsideReturns = dailyReturns.filter(r => r < 0);
+  const downsideVariance = downsideReturns.length > 0
+    ? downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length
+    : 0;
+  const downsideDeviation = Math.sqrt(downsideVariance * 252) * 100;
+  const sortinoRatio = downsideDeviation > 0 ? excessReturn / (downsideDeviation / 100) : 0;
+  
+  // 8. Win Rate
+  const positiveReturns = dailyReturns.filter(r => r > 0).length;
+  const winRate = (positiveReturns / dailyReturns.length) * 100;
+  
+  // 9. Average Win / Average Loss
+  const wins = dailyReturns.filter(r => r > 0);
+  const losses = dailyReturns.filter(r => r < 0);
+  const avgWin = wins.length > 0 ? wins.reduce((sum, r) => sum + r, 0) / wins.length : 0;
+  const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((sum, r) => sum + r, 0) / losses.length) : 0;
+  const winLossRatio = avgLoss > 0 ? avgWin / avgLoss : 0;
+  
+  return {
+    totalReturn: totalReturn.toFixed(2),
+    annualizedReturn: annualizedReturn.toFixed(2),
+    volatility: volatility.toFixed(2),
+    sharpeRatio: sharpeRatio.toFixed(3),
+    maxDrawdown: (maxDrawdown * 100).toFixed(2),
+    calmarRatio: calmarRatio.toFixed(3),
+    sortinoRatio: sortinoRatio.toFixed(3),
+    winRate: winRate.toFixed(2),
+    winLossRatio: winLossRatio.toFixed(3),
+    tradingDays: days
+  };
+}
+
 // Calculate ETF net value
 function calculateETFNetValue(etfData) {
   if (!etfData || !etfData.items || etfData.items.length === 0) {
@@ -845,14 +932,9 @@ app.post('/api/backtest', async (req, res) => {
     // Calculate ETF net value
     const etfNetValue = calculateETFNetValue(etfData);
     
-    // Calculate statistics
-    const portfolioReturn = portfolioNetValue.length > 0 
-      ? ((portfolioNetValue[portfolioNetValue.length - 1].netValue - 1) * 100).toFixed(2)
-      : 0;
-    
-    const etfReturn = etfNetValue.length > 0
-      ? ((etfNetValue[etfNetValue.length - 1].netValue - 1) * 100).toFixed(2)
-      : 0;
+    // Calculate performance metrics
+    const portfolioMetrics = calculatePerformanceMetrics(portfolioNetValue);
+    const etfMetrics = calculatePerformanceMetrics(etfNetValue);
     
     res.json({
       success: true,
@@ -860,9 +942,13 @@ app.post('/api/backtest', async (req, res) => {
         portfolio: portfolioNetValue,
         etf: etfNetValue,
         stocksInfo: stocksInfo,
+        metrics: {
+          portfolio: portfolioMetrics,
+          etf: etfMetrics
+        },
         statistics: {
-          portfolioReturn: portfolioReturn,
-          etfReturn: etfReturn,
+          portfolioReturn: portfolioMetrics ? portfolioMetrics.totalReturn : '0.00',
+          etfReturn: etfMetrics ? etfMetrics.totalReturn : '0.00',
           stockCount: stockCodes.length,
           validStocks: stocksData.filter(s => s.data && s.data.items && s.data.items.length > 0).length
         }
@@ -1145,18 +1231,15 @@ app.post('/api/backtest-dynamic', async (req, res) => {
     const etfData = await getFundDailyData('512890.SH', startDate, endDate);
     const etfNetValue = calculateETFNetValue(etfData);
     
-    // Step 8: Calculate statistics
-    const portfolioReturn = portfolioNetValue.length > 0 
-      ? ((portfolioNetValue[portfolioNetValue.length - 1].netValue - 1) * 100).toFixed(2)
-      : 0;
-    
-    const etfReturn = etfNetValue.length > 0
-      ? ((etfNetValue[etfNetValue.length - 1].netValue - 1) * 100).toFixed(2)
-      : 0;
+    // Step 8: Calculate performance metrics
+    const portfolioMetrics = calculatePerformanceMetrics(portfolioNetValue);
+    const etfMetrics = calculatePerformanceMetrics(etfNetValue);
     
     console.log(`\n=== Results ===`);
-    console.log(`Portfolio Return: ${portfolioReturn}%`);
-    console.log(`ETF Return: ${etfReturn}%`);
+    console.log(`Portfolio Return: ${portfolioMetrics ? portfolioMetrics.totalReturn : 0}%`);
+    console.log(`ETF Return: ${etfMetrics ? etfMetrics.totalReturn : 0}%`);
+    console.log(`Portfolio Sharpe: ${portfolioMetrics ? portfolioMetrics.sharpeRatio : 0}`);
+    console.log(`Portfolio Max Drawdown: ${portfolioMetrics ? portfolioMetrics.maxDrawdown : 0}%`);
     console.log(`Rebalancing periods: ${portfolioPeriods.length}`);
     
     // Step 9: Get stock names for all stocks
@@ -1236,9 +1319,13 @@ app.post('/api/backtest-dynamic', async (req, res) => {
         portfolio: portfolioNetValue,
         etf: etfNetValue,
         periods: periodsWithChanges,
+        metrics: {
+          portfolio: portfolioMetrics,
+          etf: etfMetrics
+        },
         statistics: {
-          portfolioReturn: portfolioReturn,
-          etfReturn: etfReturn,
+          portfolioReturn: portfolioMetrics ? portfolioMetrics.totalReturn : '0.00',
+          etfReturn: etfMetrics ? etfMetrics.totalReturn : '0.00',
           rebalancingCount: portfolioPeriods.length,
           totalStocks: allStockCodes.length
         }

@@ -455,6 +455,11 @@
         .stocks-table tr:hover {
             background: #f9fafb;
         }
+
+        .better-metric {
+            color: #10b981;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -542,6 +547,22 @@
                 <div class="chart-container">
                     <canvas id="netValueChart"></canvas>
                 </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="card" id="metricsSection" style="display: none;">
+                <h2 style="margin-bottom: 20px; color: #333;">📊 绩效指标</h2>
+                <table class="stocks-table">
+                    <thead>
+                        <tr>
+                            <th>指标</th>
+                            <th>组合</th>
+                            <th>ETF</th>
+                            <th>说明</th>
+                        </tr>
+                    </thead>
+                    <tbody id="metricsTableBody"></tbody>
+                </table>
             </div>
 
             <!-- Dynamic Periods -->
@@ -651,7 +672,7 @@
         }
 
         function displayStaticResults(data) {
-            const { portfolio, etf, stocksInfo, statistics } = data;
+            const { portfolio, etf, stocksInfo, statistics, metrics } = data;
 
             // Update statistics
             document.getElementById('portfolioReturn').textContent = statistics.portfolioReturn + '%';
@@ -669,6 +690,12 @@
             // Draw chart
             drawChart(portfolio, etf);
 
+            // Display metrics
+            if (metrics) {
+                displayMetrics(metrics);
+                document.getElementById('metricsSection').style.display = 'block';
+            }
+
             // Display holdings
             displayHoldings(stocksInfo);
 
@@ -679,7 +706,7 @@
         }
 
         function displayDynamicResults(data) {
-            const { portfolio, etf, periods, statistics } = data;
+            const { portfolio, etf, periods, statistics, metrics } = data;
 
             // Update statistics
             document.getElementById('portfolioReturn').textContent = statistics.portfolioReturn + '%';
@@ -696,6 +723,12 @@
 
             // Draw chart
             drawChart(portfolio, etf);
+
+            // Display metrics
+            if (metrics) {
+                displayMetrics(metrics);
+                document.getElementById('metricsSection').style.display = 'block';
+            }
 
             // Display periods
             displayPeriods(periods);
@@ -766,6 +799,53 @@
                         }
                     }
                 }
+            });
+        }
+
+        function displayMetrics(metrics) {
+            const tbody = document.getElementById('metricsTableBody');
+            tbody.innerHTML = '';
+
+            const metricsConfig = [
+                { key: 'totalReturn', label: '累计收益率', unit: '%', desc: '整个回测期间的总收益' },
+                { key: 'annualizedReturn', label: '年化收益率', unit: '%', desc: '按年化计算的平均收益' },
+                { key: 'volatility', label: '年化波动率', unit: '%', desc: '收益率的标准差（风险）' },
+                { key: 'sharpeRatio', label: '夏普比率', unit: '', desc: '风险调整后的收益（越高越好）' },
+                { key: 'maxDrawdown', label: '最大回撤', unit: '%', desc: '从最高点到最低点的最大跌幅' },
+                { key: 'calmarRatio', label: '卡玛比率', unit: '', desc: '年化收益/最大回撤（越高越好）' },
+                { key: 'sortinoRatio', label: '索提诺比率', unit: '', desc: '下行风险调整后的收益' },
+                { key: 'winRate', label: '胜率', unit: '%', desc: '上涨交易日占比' },
+                { key: 'winLossRatio', label: '盈亏比', unit: '', desc: '平均盈利/平均亏损' }
+            ];
+
+            metricsConfig.forEach(config => {
+                const row = tbody.insertRow();
+                const portfolioValue = metrics.portfolio ? metrics.portfolio[config.key] : '-';
+                const etfValue = metrics.etf ? metrics.etf[config.key] : '-';
+                
+                // Highlight better performance
+                let portfolioClass = '';
+                let etfClass = '';
+                if (portfolioValue !== '-' && etfValue !== '-') {
+                    const pVal = parseFloat(portfolioValue);
+                    const eVal = parseFloat(etfValue);
+                    if (config.key === 'maxDrawdown') {
+                        // Lower is better for drawdown
+                        portfolioClass = pVal < eVal ? 'better-metric' : '';
+                        etfClass = eVal < pVal ? 'better-metric' : '';
+                    } else {
+                        // Higher is better for others
+                        portfolioClass = pVal > eVal ? 'better-metric' : '';
+                        etfClass = eVal > pVal ? 'better-metric' : '';
+                    }
+                }
+                
+                row.innerHTML = `
+                    <td><strong>${config.label}</strong></td>
+                    <td class="${portfolioClass}">${portfolioValue}${config.unit}</td>
+                    <td class="${etfClass}">${etfValue}${config.unit}</td>
+                    <td style="color: #666; font-size: 13px;">${config.desc}</td>
+                `;
             });
         }
 
