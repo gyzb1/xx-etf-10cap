@@ -362,7 +362,7 @@ function calculatePortfolioNetValue(stocksData, weights) {
   return netValueData;
 }
 
-// Calculate market cap weights (市值加权)
+// Calculate market cap weights with 10% cap constraint (市值加权 + 10%上限)
 function calculateDualFactorWeights(stocksFactors) {
   console.log(`\nCalculating weights for ${stocksFactors.length} stocks...`);
   
@@ -388,15 +388,69 @@ function calculateDualFactorWeights(stocksFactors) {
     };
   }
   
-  // Calculate weights directly proportional to market cap
+  // Step 1: Calculate initial market cap weights
   const totalMarketCap = validStocks.reduce((sum, s) => sum + s.marketCap, 0);
   const weights = {};
   
   validStocks.forEach(s => {
-    weights[s.code] = totalMarketCap > 0 ? s.marketCap / totalMarketCap : 1 / validStocks.length;
+    weights[s.code] = s.marketCap / totalMarketCap;
   });
   
-  console.log(`Calculated weights for ${Object.keys(weights).length} stocks`);
+  // Step 2: Apply 10% cap constraint with iterative adjustment
+  const MAX_WEIGHT = 0.10; // 10% cap
+  const MAX_ITERATIONS = 100;
+  let iteration = 0;
+  let hasOverweight = true;
+  
+  while (hasOverweight && iteration < MAX_ITERATIONS) {
+    hasOverweight = false;
+    let excessWeight = 0;
+    const cappedStocks = new Set();
+    const uncappedStocks = [];
+    
+    // Find stocks exceeding 10% and calculate excess
+    for (const [code, weight] of Object.entries(weights)) {
+      if (weight > MAX_WEIGHT) {
+        hasOverweight = true;
+        excessWeight += (weight - MAX_WEIGHT);
+        weights[code] = MAX_WEIGHT;
+        cappedStocks.add(code);
+      } else {
+        uncappedStocks.push(code);
+      }
+    }
+    
+    // Redistribute excess weight to uncapped stocks proportionally
+    if (hasOverweight && uncappedStocks.length > 0) {
+      const uncappedTotalWeight = uncappedStocks.reduce((sum, code) => sum + weights[code], 0);
+      
+      if (uncappedTotalWeight > 0) {
+        uncappedStocks.forEach(code => {
+          const proportion = weights[code] / uncappedTotalWeight;
+          weights[code] += excessWeight * proportion;
+        });
+      } else {
+        // If all uncapped stocks have 0 weight, distribute equally
+        const equalShare = excessWeight / uncappedStocks.length;
+        uncappedStocks.forEach(code => {
+          weights[code] += equalShare;
+        });
+      }
+    }
+    
+    iteration++;
+  }
+  
+  // Log capped stocks
+  const cappedStocksList = Object.entries(weights)
+    .filter(([code, weight]) => weight >= MAX_WEIGHT * 0.999) // Allow small rounding errors
+    .map(([code, weight]) => `${code}: ${(weight * 100).toFixed(2)}%`);
+  
+  if (cappedStocksList.length > 0) {
+    console.log(`  Stocks capped at 10%: ${cappedStocksList.join(', ')}`);
+  }
+  
+  console.log(`Calculated weights for ${Object.keys(weights).length} stocks (${iteration} iterations)`);
   
   // Return both weights and processed factors
   return {
