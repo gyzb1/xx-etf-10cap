@@ -521,11 +521,7 @@ function calculatePerformanceMetrics(netValueData, riskFreeRate = 0.03) {
   const downsideDeviation = Math.sqrt(downsideVariance * 252) * 100;
   const sortinoRatio = downsideDeviation > 0 ? excessReturn / (downsideDeviation / 100) : 0;
   
-  // 8. Win Rate
-  const positiveReturns = dailyReturns.filter(r => r > 0).length;
-  const winRate = (positiveReturns / dailyReturns.length) * 100;
-  
-  // 9. Average Win / Average Loss
+  // 8. Average Win / Average Loss
   const wins = dailyReturns.filter(r => r > 0);
   const losses = dailyReturns.filter(r => r < 0);
   const avgWin = wins.length > 0 ? wins.reduce((sum, r) => sum + r, 0) / wins.length : 0;
@@ -540,9 +536,63 @@ function calculatePerformanceMetrics(netValueData, riskFreeRate = 0.03) {
     maxDrawdown: (maxDrawdown * 100).toFixed(2),
     calmarRatio: calmarRatio.toFixed(3),
     sortinoRatio: sortinoRatio.toFixed(3),
-    winRate: winRate.toFixed(2),
     winLossRatio: winLossRatio.toFixed(3),
-    tradingDays: days
+    tradingDays: days,
+    dailyReturns: dailyReturns // Return for benchmark comparison
+  };
+}
+
+// Calculate relative performance metrics (Information Ratio, Treynor Ratio)
+function calculateRelativeMetrics(portfolioMetrics, benchmarkMetrics, riskFreeRate = 0.03) {
+  if (!portfolioMetrics || !benchmarkMetrics || !portfolioMetrics.dailyReturns || !benchmarkMetrics.dailyReturns) {
+    return null;
+  }
+  
+  const portfolioReturns = portfolioMetrics.dailyReturns;
+  const benchmarkReturns = benchmarkMetrics.dailyReturns;
+  
+  // Align the lengths (use minimum length)
+  const minLength = Math.min(portfolioReturns.length, benchmarkReturns.length);
+  const pReturns = portfolioReturns.slice(0, minLength);
+  const bReturns = benchmarkReturns.slice(0, minLength);
+  
+  // 1. Information Ratio = (Portfolio Return - Benchmark Return) / Tracking Error
+  const excessReturns = pReturns.map((r, i) => r - bReturns[i]);
+  const avgExcessReturn = excessReturns.reduce((sum, r) => sum + r, 0) / excessReturns.length;
+  
+  // Tracking Error (standard deviation of excess returns)
+  const trackingErrorVariance = excessReturns.reduce((sum, r) => 
+    sum + Math.pow(r - avgExcessReturn, 2), 0) / excessReturns.length;
+  const trackingError = Math.sqrt(trackingErrorVariance * 252) * 100; // Annualized
+  
+  const informationRatio = trackingError > 0 ? (avgExcessReturn * 252 * 100) / trackingError : 0;
+  
+  // 2. Treynor Ratio = (Portfolio Return - Risk Free Rate) / Beta
+  // Calculate Beta (covariance / variance)
+  const benchmarkMean = bReturns.reduce((sum, r) => sum + r, 0) / bReturns.length;
+  const portfolioMean = pReturns.reduce((sum, r) => sum + r, 0) / pReturns.length;
+  
+  let covariance = 0;
+  let benchmarkVariance = 0;
+  
+  for (let i = 0; i < minLength; i++) {
+    covariance += (pReturns[i] - portfolioMean) * (bReturns[i] - benchmarkMean);
+    benchmarkVariance += Math.pow(bReturns[i] - benchmarkMean, 2);
+  }
+  
+  covariance /= minLength;
+  benchmarkVariance /= minLength;
+  
+  const beta = benchmarkVariance > 0 ? covariance / benchmarkVariance : 0;
+  
+  const portfolioAnnualReturn = parseFloat(portfolioMetrics.annualizedReturn) / 100;
+  const treynorRatio = beta !== 0 ? (portfolioAnnualReturn - riskFreeRate) / beta : 0;
+  
+  return {
+    informationRatio: informationRatio.toFixed(3),
+    treynorRatio: (treynorRatio * 100).toFixed(3), // Scale for display
+    beta: beta.toFixed(3),
+    trackingError: trackingError.toFixed(2)
   };
 }
 
@@ -936,6 +986,9 @@ app.post('/api/backtest', async (req, res) => {
     const portfolioMetrics = calculatePerformanceMetrics(portfolioNetValue);
     const etfMetrics = calculatePerformanceMetrics(etfNetValue);
     
+    // Calculate relative metrics (Information Ratio, Treynor Ratio)
+    const relativeMetrics = calculateRelativeMetrics(portfolioMetrics, etfMetrics);
+    
     res.json({
       success: true,
       data: {
@@ -944,7 +997,8 @@ app.post('/api/backtest', async (req, res) => {
         stocksInfo: stocksInfo,
         metrics: {
           portfolio: portfolioMetrics,
-          etf: etfMetrics
+          etf: etfMetrics,
+          relative: relativeMetrics
         },
         statistics: {
           portfolioReturn: portfolioMetrics ? portfolioMetrics.totalReturn : '0.00',
@@ -1235,11 +1289,15 @@ app.post('/api/backtest-dynamic', async (req, res) => {
     const portfolioMetrics = calculatePerformanceMetrics(portfolioNetValue);
     const etfMetrics = calculatePerformanceMetrics(etfNetValue);
     
+    // Calculate relative metrics
+    const relativeMetrics = calculateRelativeMetrics(portfolioMetrics, etfMetrics);
+    
     console.log(`\n=== Results ===`);
     console.log(`Portfolio Return: ${portfolioMetrics ? portfolioMetrics.totalReturn : 0}%`);
     console.log(`ETF Return: ${etfMetrics ? etfMetrics.totalReturn : 0}%`);
     console.log(`Portfolio Sharpe: ${portfolioMetrics ? portfolioMetrics.sharpeRatio : 0}`);
     console.log(`Portfolio Max Drawdown: ${portfolioMetrics ? portfolioMetrics.maxDrawdown : 0}%`);
+    console.log(`Information Ratio: ${relativeMetrics ? relativeMetrics.informationRatio : 0}`);
     console.log(`Rebalancing periods: ${portfolioPeriods.length}`);
     
     // Step 9: Get stock names for all stocks
@@ -1321,7 +1379,8 @@ app.post('/api/backtest-dynamic', async (req, res) => {
         periods: periodsWithChanges,
         metrics: {
           portfolio: portfolioMetrics,
-          etf: etfMetrics
+          etf: etfMetrics,
+          relative: relativeMetrics
         },
         statistics: {
           portfolioReturn: portfolioMetrics ? portfolioMetrics.totalReturn : '0.00',

@@ -814,19 +814,36 @@
                 { key: 'maxDrawdown', label: '最大回撤', unit: '%', desc: '从最高点到最低点的最大跌幅' },
                 { key: 'calmarRatio', label: '卡玛比率', unit: '', desc: '年化收益/最大回撤（越高越好）' },
                 { key: 'sortinoRatio', label: '索提诺比率', unit: '', desc: '下行风险调整后的收益' },
-                { key: 'winRate', label: '胜率', unit: '%', desc: '上涨交易日占比' },
                 { key: 'winLossRatio', label: '盈亏比', unit: '', desc: '平均盈利/平均亏损' }
             ];
+            
+            // Add relative metrics if available
+            if (metrics.relative) {
+                metricsConfig.push(
+                    { key: 'informationRatio', label: '信息比率', unit: '', desc: '相对基准的超额收益/跟踪误差', isRelative: true },
+                    { key: 'treynorRatio', label: '特雷诺比率', unit: '', desc: '超额收益/Beta（系统性风险）', isRelative: true },
+                    { key: 'beta', label: 'Beta系数', unit: '', desc: '相对基准的波动性', isRelative: true },
+                    { key: 'trackingError', label: '跟踪误差', unit: '%', desc: '与基准的偏离程度', isRelative: true }
+                );
+            }
 
             metricsConfig.forEach(config => {
                 const row = tbody.insertRow();
-                const portfolioValue = metrics.portfolio ? metrics.portfolio[config.key] : '-';
-                const etfValue = metrics.etf ? metrics.etf[config.key] : '-';
                 
-                // Highlight better performance
+                // For relative metrics, get value from metrics.relative
+                let portfolioValue, etfValue;
+                if (config.isRelative) {
+                    portfolioValue = metrics.relative ? metrics.relative[config.key] : '-';
+                    etfValue = '-'; // Relative metrics don't have ETF values
+                } else {
+                    portfolioValue = metrics.portfolio ? metrics.portfolio[config.key] : '-';
+                    etfValue = metrics.etf ? metrics.etf[config.key] : '-';
+                }
+                
+                // Highlight better performance (only for non-relative metrics)
                 let portfolioClass = '';
                 let etfClass = '';
-                if (portfolioValue !== '-' && etfValue !== '-') {
+                if (!config.isRelative && portfolioValue !== '-' && etfValue !== '-') {
                     const pVal = parseFloat(portfolioValue);
                     const eVal = parseFloat(etfValue);
                     if (config.key === 'maxDrawdown') {
