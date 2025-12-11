@@ -1159,15 +1159,35 @@ app.post('/api/backtest-dynamic', async (req, res) => {
     // Step 3: For each reporting period, get holdings and calculate weights
     const portfolioPeriods = [];
     
+    // Helper function to calculate disclosure date (report date + 2 months)
+    function getDisclosureDate(reportDate) {
+      const year = parseInt(reportDate.substring(0, 4));
+      const month = parseInt(reportDate.substring(4, 6));
+      const day = parseInt(reportDate.substring(6, 8));
+      
+      const date = new Date(year, month - 1, day);
+      date.setMonth(date.getMonth() + 2); // Add 2 months for disclosure
+      
+      const discYear = date.getFullYear();
+      const discMonth = String(date.getMonth() + 1).padStart(2, '0');
+      const discDay = String(date.getDate()).padStart(2, '0');
+      
+      return `${discYear}${discMonth}${discDay}`;
+    }
+    
     for (let i = 0; i < reportingPeriods.length; i++) {
       const reportDate = reportingPeriods[i];
-      const nextReportDate = i < reportingPeriods.length - 1 ? reportingPeriods[i + 1] : endDate;
       
       // For the first period, use startDate as the period start
-      // For subsequent periods, use the report date
-      const periodStart = i === 0 ? startDate : reportDate;
+      // For subsequent periods, use disclosure date (report date + 2 months)
+      const periodStart = i === 0 ? startDate : getDisclosureDate(reportDate);
       
-      console.log(`\n--- Period ${i + 1}/${reportingPeriods.length}: Report ${reportDate}, Active ${periodStart} to ${nextReportDate} ---`);
+      // Period ends when next report is disclosed, or at endDate
+      const periodEnd = i < reportingPeriods.length - 1 
+        ? getDisclosureDate(reportingPeriods[i + 1]) 
+        : endDate;
+      
+      console.log(`\n--- Period ${i + 1}/${reportingPeriods.length}: Report ${reportDate}, Disclosed ~${periodStart}, Active ${periodStart} to ${periodEnd} ---`);
       
       // Get holdings for this period
       const periodHoldings = allPortfolioData.items.filter(item => item[endDateIdx] === reportDate);
@@ -1190,7 +1210,7 @@ app.post('/api/backtest-dynamic', async (req, res) => {
       portfolioPeriods.push({
         reportDate: reportDate,
         startDate: periodStart,
-        endDate: nextReportDate,
+        endDate: periodEnd,
         stockCodes: uniqueStockCodes
       });
     }
