@@ -116,8 +116,20 @@ async function getStockCompanyInfo(tsCode) {
 // Get daily basic data (for market cap and dividend yield)
 async function getDailyBasic(tsCode, endDate) {
   try {
-    // Get data for a date range to ensure we get data even if endDate is not a trading day
-    const startDate = endDate.substring(0, 6) + '01'; // First day of the month
+    // Get data for a wider date range to ensure we get data
+    // Use 3 months before endDate to handle cases where endDate might not have data
+    const endYear = parseInt(endDate.substring(0, 4));
+    const endMonth = parseInt(endDate.substring(4, 6));
+    const endDay = parseInt(endDate.substring(6, 8));
+    
+    const date = new Date(endYear, endMonth - 1, endDay);
+    date.setMonth(date.getMonth() - 3); // Go back 3 months
+    
+    const startYear = date.getFullYear();
+    const startMonth = String(date.getMonth() + 1).padStart(2, '0');
+    const startDay = String(date.getDate()).padStart(2, '0');
+    const startDate = `${startYear}${startMonth}${startDay}`;
+    
     const data = await callTushareAPI('daily_basic', {
       ts_code: tsCode,
       start_date: startDate,
