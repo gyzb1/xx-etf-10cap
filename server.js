@@ -618,6 +618,7 @@ function calculateRelativeMetrics(portfolioMetrics, benchmarkMetrics, riskFreeRa
 // Calculate ETF net value with manual dividend adjustment
 function calculateETFNetValue(etfData) {
   if (!etfData || !etfData.items || etfData.items.length === 0) {
+    console.warn('ETF data is empty or invalid');
     return [];
   }
   
@@ -628,27 +629,42 @@ function calculateETFNetValue(etfData) {
   const pctChgIdx = fields.indexOf('pct_chg'); // 涨跌幅（%）
   
   console.log(`ETF net value calculation:`);
+  console.log(`  - Total items: ${items.length}`);
   console.log(`  - Available fields: ${fields.join(', ')}`);
   console.log(`  - close index: ${closeIdx}`);
   console.log(`  - pct_chg index: ${pctChgIdx}`);
   
   const sortedItems = items.sort((a, b) => a[dateIdx] - b[dateIdx]);
   
+  if (sortedItems.length > 0) {
+    console.log(`  - Date range: ${sortedItems[0][dateIdx]} to ${sortedItems[sortedItems.length - 1][dateIdx]}`);
+  }
+  
   if (pctChgIdx >= 0) {
     // Use pct_chg to calculate cumulative returns (handles dividends correctly)
     console.log(`  - Using pct_chg for dividend-adjusted returns`);
     let cumulativeValue = 1.0;
+    let missingDataCount = 0;
     
-    return sortedItems.map((item, index) => {
+    const result = sortedItems.map((item, index) => {
       if (index > 0) {
-        const pctChg = item[pctChgIdx] || 0;
-        cumulativeValue *= (1 + pctChg / 100);
+        const pctChg = item[pctChgIdx];
+        if (pctChg === null || pctChg === undefined) {
+          missingDataCount++;
+        }
+        cumulativeValue *= (1 + (pctChg || 0) / 100);
       }
       return {
         date: item[dateIdx],
         netValue: cumulativeValue
       };
     });
+    
+    if (missingDataCount > 0) {
+      console.warn(`  - Warning: ${missingDataCount} items have missing pct_chg data`);
+    }
+    
+    return result;
   } else {
     // Fallback: use close price (may have dividend gaps)
     console.log(`  - Fallback: using close price`);
