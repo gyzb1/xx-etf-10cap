@@ -1222,10 +1222,10 @@ app.post('/api/backtest-dynamic', async (req, res) => {
       console.log(`\nPeriod: Report ${period.reportDate}, Rebalance on ${period.startDate}`);
       
       // Fetch factor data for this period's stocks (market cap for weighting)
-      // Use startDate (rebalancing date) market cap to avoid look-ahead bias
+      // Use reportDate (report period end) market cap to match ETF's weighting methodology
       const stocksFactors = await batchProcess(period.stockCodes, async (code, index) => {
         try {
-          const dailyBasicInfo = await getDailyBasic(code, period.startDate);
+          const dailyBasicInfo = await getDailyBasic(code, period.reportDate);
           
           let pb = null;
           let marketCap = null;
