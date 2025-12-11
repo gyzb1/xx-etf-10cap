@@ -1114,12 +1114,12 @@ app.post('/api/backtest-dynamic', async (req, res) => {
     const today = new Date();
     const currentDate = today.toISOString().slice(0, 10).replace(/-/g, '');
     
-    // A report is considered "disclosed" if it's at least 4 months old
-    // (e.g., 2024 Q2 report on 20240630 is disclosed after 20241031)
+    // A report is considered "disclosed" if it's at least 2 months old
+    // (e.g., 2024 Q2 report on 20240630 is disclosed after 20240830)
     const disclosedDates = allEndDates.filter(date => {
       const reportDate = new Date(date.slice(0, 4), parseInt(date.slice(4, 6)) - 1, parseInt(date.slice(6, 8)));
       const disclosureDate = new Date(reportDate);
-      disclosureDate.setMonth(disclosureDate.getMonth() + 4); // Add 4 months for disclosure
+      disclosureDate.setMonth(disclosureDate.getMonth() + 2); // Add 2 months for disclosure
       return disclosureDate <= today;
     });
     
